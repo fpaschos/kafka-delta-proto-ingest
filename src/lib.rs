@@ -1,4 +1,5 @@
-pub mod ingest;
+mod ingest;
+mod deserialize;
 
 use std::sync::Arc;
 use rdkafka::{ClientConfig, ClientContext};
@@ -7,6 +8,7 @@ use rdkafka::consumer::{Consumer, ConsumerContext, StreamConsumer};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use url::Url;
+use crate::ingest::IngestProcessor;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
@@ -81,21 +83,25 @@ pub async fn start_ingest(
         IngestError::IngestError
     })?;
 
+
+    let ingest_processor = IngestProcessor::new(topic, opts)?;
+
     // The run loop
     loop {
         tokio::select! {
-            _ = cancellation_token.cancelled() => {
-                return Ok(());
-            }
             consumer_result = consumer.recv() => {
                 match consumer_result {
                     Ok(message) => {
-                        info!("Received message: {:?}", message);
+                        ingest_processor.process_message(message).await?;
                     }
                     Err(e) => {
                         error!("Error while consuming message: {:?}", e);
                     }
                 }
+            }
+            _ = cancellation_token.cancelled() => {
+                // TODO clean up if needed
+                return Ok(());
             }
         }
     }

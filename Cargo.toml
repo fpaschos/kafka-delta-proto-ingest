@@ -16,6 +16,8 @@ tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"]}
 url = "2.5.0"
 futures-util = "0.3.30"
 futures = "0.3.30"
+schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
+protofish = "0.5.2"
 
 [profile.release]
 lto = true
