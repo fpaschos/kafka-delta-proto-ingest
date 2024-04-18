@@ -7,11 +7,15 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.82"
+rdkafka = "0.36.2"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = "0.7.10"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"]}
+url = "2.5.0"
+futures-util = "0.3.30"
+futures = "0.3.30"
 
 [profile.release]
 lto = true
