@@ -1,4 +1,3 @@
-use protofish::prelude::Value;
 use rdkafka::Message;
 use schema_registry_converter::async_impl::proto_decoder::DecodeResultWithContext;
 use tracing::{info, trace};
@@ -37,8 +36,6 @@ impl IngestProcessor {
                 let info = value.context.context.get_message(&full_name).unwrap();
                 value.value.fields.iter().for_each(|v| {
                     let field = info.get_field(v.number).unwrap();
-
-
 
                     info!("FieldName: {:?} Value: {:?} ", field.name,  v.value);
 

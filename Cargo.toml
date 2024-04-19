@@ -18,6 +18,22 @@ futures-util = "0.3.30"
 futures = "0.3.30"
 schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
 protofish = "0.5.2"
+deltalake = { version = "0.17.1", features = ["datafusion"] }
+serde = "1.0.198"
+serde_json = "1.0.116"
+
+
+[[example]]
+name = "create-table"
+path = "examples/delta/create_table/main.rs"
+
+[[example]]
+name = "write-table"
+path = "examples/delta/write_table/main.rs"
+
+[[example]]
+name = "read-table"
+path = "examples/delta/read_table/main.rs"
 
 [profile.release]
 lto = true

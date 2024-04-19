@@ -40,8 +40,6 @@ impl Default for IngestOptions {
 /// Formats for message parsing
 #[derive(Clone, Debug)]
 pub enum MessageFormat {
-    Json(SchemaSource),
-    // TODO remove propably
     Protobuf(SchemaSource),
 }
 

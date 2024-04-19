@@ -3,7 +3,6 @@ use schema_registry_converter::async_impl::schema_registry::SrSettings;
 use schema_registry_converter::error::SRCError;
 use crate::{IngestError, IngestOptions, SchemaSource};
 use crate::MessageFormat::Protobuf;
-use protofish::decode::Value;
 use schema_registry_converter::async_impl::proto_decoder::DecodeResultWithContext;
 
 
