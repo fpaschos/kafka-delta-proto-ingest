@@ -1,5 +1,5 @@
 use deltalake::DeltaOps;
-use deltalake::kernel::{DataType, PrimitiveType};
+use deltalake::kernel::{DataType, PrimitiveType, StructField};
 use deltalake::protocol::SaveMode;
 
 /// Example for learning purposes create table
@@ -12,7 +12,9 @@ async fn main() -> anyhow::Result<()> {
         .with_table_name("claim")
         .with_comment("Claims table")
         .with_save_mode(SaveMode::Overwrite)
-        .with_column("id", DataType::Primitive(PrimitiveType::Integer), false, None)
+        .with_columns(vec![
+            StructField::new("id", DataType::Primitive(PrimitiveType::Integer), false),
+        ])
         .await?;
 
 

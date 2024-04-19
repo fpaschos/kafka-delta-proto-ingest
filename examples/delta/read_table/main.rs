@@ -12,14 +12,9 @@ async fn main() -> anyhow::Result<()> {
     let ctx = SessionContext::new();
     ctx.register_table("claims", Arc::new(table))?;
 
-    let df = ctx.sql("SELECT * FROM claims").await?;
+    let df = ctx.sql("SELECT count(*) FROM claims WHERE id > 998").await?;
+    df.show().await?;
 
-    let batches = df.collect().await?;
-
-    for (i, batch) in batches.iter().enumerate() {
-        println!("Batch {} rows {}",i, batch.num_rows());
-
-    }
 
     Ok(())
 }

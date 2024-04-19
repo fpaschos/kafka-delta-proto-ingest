@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     }).collect();
     let data_len = data.len();
 
-    writer.write_with_mode(data, WriteMode::Default).await?;
+    writer.write(data).await?;
     writer.flush_and_commit(&mut table).await?;
 
     println!("Wrote data size {} to table {}",data_len ,table.table_uri());

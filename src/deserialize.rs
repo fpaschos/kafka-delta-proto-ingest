@@ -21,11 +21,6 @@ pub struct ProtoDeserializer {
 }
 
 impl ProtoDeserializer {
-    // pub(crate) fn from_schema_registry(_sr_settings: SrSettings) -> Self {
-    //     ProtoDeserializer {
-    //         // schema: schema,
-    //     }
-    // }
 
     pub fn build_from(opts: IngestOptions) -> Result<Self, IngestError> {
         match &opts.input_format {
