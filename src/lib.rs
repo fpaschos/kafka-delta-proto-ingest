@@ -3,7 +3,6 @@ mod deserialize;
 
 use std::sync::Arc;
 use rdkafka::{ClientConfig, ClientContext};
-use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::{Consumer, ConsumerContext, StreamConsumer};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
