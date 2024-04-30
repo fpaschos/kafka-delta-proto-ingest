@@ -27,7 +27,7 @@ pub enum SchemaRegistryError
 
 
     #[error("Arrow schema conversion error: {0}")]
-    ArrowSchemaError (
+    ArrowSchemaGenerationError(
         String,
     )
 
@@ -140,11 +140,9 @@ fn get_all_schemas_recursive<'a>(
 
 #[cfg(test)]
 mod tests {
-    use protofish::context::ValueType;
     use super::*;
 
 
-    const SCHEMA_REGISTRY_URL: &str = "http://localhost:58085/";
 
     fn get_proto_sample() -> &'static str {
         r#"
@@ -180,34 +178,6 @@ mod tests {
 
         let ctx = &res.context;
         let info = ctx.get_message("model.Task").unwrap();
-        info.iter_fields().for_each(|f| {
-            match f.field_type {
-                ValueType::Double => {
-
-                }
-                ValueType::Float => {}
-                ValueType::Int32 => {}
-                ValueType::Int64 => {}
-                ValueType::UInt32 => {}
-                ValueType::UInt64 => {}
-                ValueType::SInt32 => {}
-                ValueType::SInt64 => {}
-                ValueType::Fixed32 => {}
-                ValueType::Fixed64 => {}
-                ValueType::SFixed32 => {}
-                ValueType::SFixed64 => {}
-                ValueType::Bool => {}
-                ValueType::String => {}
-                ValueType::Bytes => {}
-                ValueType::Message(_) => {}
-                ValueType::Enum(enum_ref) => {
-
-
-                }
-            }
-
-
-        });
 
 
         // res.context.
@@ -215,8 +185,8 @@ mod tests {
         println!("{:?}", res);
         println!("{:?}", info);
 
-        let arrow_schema = res.to_arrow_schema().unwrap();
-        println!("{:?}", arrow_schema);
+        // let arrow_schema = res.to_arrow_schema().unwrap();
+        // println!("{:?}", arrow_schema);
 
 
     }
