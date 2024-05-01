@@ -29,8 +29,12 @@ pub enum SchemaRegistryError
     #[error("Arrow schema conversion error: {0}")]
     ArrowSchemaGenerationError(
         String,
-    )
+    ),
 
+    #[error("Json generation error: {0}")]
+    DecodeJsonError(
+        String
+    ),
 }
 
 
@@ -142,8 +146,6 @@ fn get_all_schemas_recursive<'a>(
 mod tests {
     use super::*;
 
-
-
     fn get_proto_sample() -> &'static str {
         r#"
         syntax = "proto3";
@@ -187,7 +189,5 @@ mod tests {
 
         // let arrow_schema = res.to_arrow_schema().unwrap();
         // println!("{:?}", arrow_schema);
-
-
     }
 }

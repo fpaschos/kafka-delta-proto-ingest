@@ -1,11 +1,15 @@
-use protofish::context::{Context, MessageField, MessageInfo, Multiplicity, ValueType};
 use deltalake::arrow::datatypes::{DataType, Field as ArrowField, Schema as ArrowSchema};
+use protofish::context::{Context, MessageField, MessageInfo, Multiplicity, ValueType};
+use protofish::decode::MessageValue;
+use protofish::prelude::{FieldValue, Value};
+use serde_json::{json, to_value, Value as JsonValue};
+
 use crate::registry::SchemaRegistryError;
 
 #[derive(Debug)]
 pub struct ProtoSchema {
-    pub(crate) context: Context,
-    pub(crate) full_name: String,
+    pub context: Context,
+    pub full_name: String,
 
 }
 
@@ -23,15 +27,34 @@ impl ProtoSchema {
         })
     }
 
+
+    #[inline]
+    pub fn full_name(&self) -> &str {
+        &self.full_name
+    }
+
+    #[inline]
+    pub fn context(&self) -> &Context {
+        &self.context
+    }
+
     pub fn to_arrow_schema(&self) -> Result<ArrowSchema, SchemaRegistryError> {
         let info = self.context.get_message(&self.full_name)
-            .ok_or(SchemaRegistryError::ArrowSchemaGenerationError(format!("Message not found {:?}", self.full_name)))?;
+            .ok_or(SchemaRegistryError::ArrowSchemaGenerationError(format!("Proto message definition not found {:?}", self.full_name)))?;
         let schema = to_arrow_schema(&self.context, info)?;
         Ok(schema)
     }
+
+    pub fn decode_to_json(&self, data: &[u8]) -> Result<JsonValue, SchemaRegistryError> {
+        let info = self.context.get_message(&self.full_name)
+            .ok_or(SchemaRegistryError::DecodeJsonError(format!("Proto message definition not found {:?}", self.full_name)))?;
+
+        let value = self.context.decode(info.self_ref, data);
+        decode_message_to_json(&self.context, &info, value)
+    }
 }
 
-pub fn to_arrow_schema(ctx: &Context, info: &MessageInfo) -> Result<ArrowSchema, SchemaRegistryError> {
+pub(crate) fn to_arrow_schema(ctx: &Context, info: &MessageInfo) -> Result<ArrowSchema, SchemaRegistryError> {
     let mut fields = vec![];
     for field in info.iter_fields() {
         let field = message_field_to_arrow(ctx, field)?;
@@ -40,7 +63,7 @@ pub fn to_arrow_schema(ctx: &Context, info: &MessageInfo) -> Result<ArrowSchema,
     Ok(ArrowSchema::new(fields))
 }
 
-fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Result<ArrowField, SchemaRegistryError> {
+pub(crate) fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Result<ArrowField, SchemaRegistryError> {
     let is_repeated = matches!(info.multiplicity, Multiplicity::Repeated | Multiplicity::RepeatedPacked);
     let field_type: DataType = match info.field_type {
         ValueType::Double => {
@@ -93,7 +116,7 @@ fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Result<ArrowFie
         }
         ValueType::Message(info) => {
 
-            //TODO handle google well known types
+            //TODO support google well known types
 
             let info = ctx.resolve_message(info);
             let mut fields = vec![];
@@ -117,13 +140,82 @@ fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Result<ArrowFie
     }
 }
 
+pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: MessageValue) -> Result<JsonValue, SchemaRegistryError> {
+    let mut json = json!({});
+    for field_value in value.fields {
+        let json = json.as_object_mut().expect("Should be always json object");
+
+        if let Some(field_info) = info.get_field(field_value.number) {
+            let decoded = decode_field_to_json(ctx, field_value, &info.full_name)?;
+            json.insert(field_info.name.clone(), decoded);
+        } else {
+            return Err(SchemaRegistryError::DecodeJsonError(format!("Missing field number {} in {} proto message definition.", field_value.number, info.full_name)));
+        }
+    }
+
+
+    Ok(json)
+}
+
+pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_full_name: &str) -> Result<JsonValue, SchemaRegistryError> {
+    match field.value {
+        Value::Bool(v) => Ok(JsonValue::Bool(v)),
+        Value::Int32(v) => Ok(JsonValue::Number(v.into())),
+        Value::Int64(v) => Ok(JsonValue::Number(v.into())),
+        Value::UInt32(v) => Ok(JsonValue::Number(v.into())),
+        Value::UInt64(v) => Ok(JsonValue::Number(v.into())),
+        Value::Float(v) => to_value(v).map_err(|e| SchemaRegistryError::DecodeJsonError(format!("Error converting float to json: {}", e))),
+        Value::Double(v) => to_value(v).map_err(|e| SchemaRegistryError::DecodeJsonError(format!("Error converting double to json: {}", e))),
+
+        Value::SInt32(v) => Ok(JsonValue::Number(v.into())),
+        Value::SInt64(v) => Ok(JsonValue::Number(v.into())),
+        Value::Fixed32(v) => Ok(JsonValue::Number(v.into())),
+        Value::Fixed64(v) => Ok(JsonValue::Number(v.into())),
+        Value::SFixed32(v) => Ok(JsonValue::Number(v.into())),
+        Value::SFixed64(v) => Ok(JsonValue::Number(v.into())),
+        Value::String(v) => Ok(JsonValue::String(v)),
+        Value::Bytes(_) => Err(SchemaRegistryError::DecodeJsonError("Bytes field not supported".to_string())),
+
+        Value::Enum(v) => {
+            let enum_info = ctx.resolve_enum(v.enum_ref);
+            let enum_value =  enum_info.get_field_by_value(v.value).ok_or(SchemaRegistryError::DecodeJsonError("Enum value not found".to_string()))?.name.clone();
+            Ok(JsonValue::String(enum_value))
+        },
+        Value::Message(_) => { todo!("Message unimplemented") },
+        Value::Packed(_) => { todo!("Packed unimplementd") },
+
+
+        Value::Incomplete(_,_) => Err(SchemaRegistryError::DecodeJsonError("Incomplete field not supported".to_string())),
+        Value::Unknown(_) => Err(SchemaRegistryError::DecodeJsonError("Unknown field not supported".to_string())),
+
+
+        // protofish::prelude::FieldValue::Enum(v) => {
+        //     let enum_info = ctx.get_enum(*v).ok_or(SchemaRegistryError::DecodeJsonError(format!("Enum value {} not found", v)))?;
+        //     let field = enum_info.get_field_by_value(*v).ok_or(SchemaRegistryError::DecodeJsonError(format!("Enum value {} not found", v)))?;
+        //     Ok(JsonValue::String(field.name.clone()))
+        // }
+        // protofish::prelude::FieldValue::Message(v) => {
+        //     let info = ctx.resolve_message(*v);
+        //     let value = ctx.decode(info.self_ref, &field.bytes);
+        //     decode_message_to_json(ctx, &info, &value)
+        // }
+
+
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use serde_json::json;
+    use serde_json::Value as JsonValue;
+    use protofish::prelude::{Value, MessageValue, FieldValue};
+
     use super::*;
 
-    #[test]
-    fn compile_proto_and_generate_arrow_schema() {
-        let raw_schemas = vec![
+    fn schemas_sample() -> Vec<String> {
+        vec![
             r#"
             syntax = "proto3";
             package example;
@@ -163,9 +255,20 @@ mod tests {
                uint64 salary = 2;
             }
             "#.to_string(),
-        ];
+        ]
+    }
 
-        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), &raw_schemas);
+    #[test]
+    fn compiled_proto() {
+        let raw_schemas = schemas_sample();
+        let proto_schema = ProtoSchema::try_compile(&raw_schemas);
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+        assert_eq!(proto_schema.full_name, "".to_string());
+    }
+
+    #[test]
+    fn compiled_proto_and_generate_arrow_schema() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), schemas_sample().as_slice());
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
         let arrow_schema = proto_schema.to_arrow_schema().expect("Can generate arrow schema from proto schema");
 
@@ -197,11 +300,11 @@ mod tests {
         let f = arrow_schema.field(5);
         assert_eq!(f.name(), "contacts");
         assert_eq!(f.data_type(), &DataType::List(ArrowField::new("element".to_string(),
-            DataType::Struct(vec![
-                ArrowField::new("address".to_string(), DataType::Utf8, true),
-                ArrowField::new("phone".to_string(), DataType::Utf8, true),
-                ArrowField::new("email".to_string(), DataType::Utf8, true),].into()
-            ), false).into()));
+                                                                  DataType::Struct(vec![
+                                                                      ArrowField::new("address".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("phone".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("email".to_string(), DataType::Utf8, true), ].into()
+                                                                  ), false).into()));
 
         let f = arrow_schema.field(6);
         assert_eq!(f.name(), "wrapped_statuses");
@@ -210,5 +313,93 @@ mod tests {
         let f = arrow_schema.field(7);
         assert_eq!(f.name(), "ids");
         assert_eq!(f.data_type(), &DataType::List(ArrowField::new("element".to_string(), DataType::Int32, false).into()));
+    }
+
+    #[test]
+    fn proto_message_to_json() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), schemas_sample().as_slice());
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+
+        let expected_json = json!({
+                "id": 1,
+                "name": "John",
+                "status": "ACTIVE",
+                "wrapped_status": "ACTIVE",
+                // "details": {
+                //     "age": 30,
+                //     "salary": 100000
+                // },
+                // "contacts": [
+                //     {
+                //         "address": "123 Main St",
+                //         "phone": "555-555-5555",
+                //         "email": "test@test.com"
+                //     },
+                //     {
+                //         "address": "456 Elm St",
+                //         "phone": "555-555-5555",
+                //         "email": "test@test.com"
+                //     }
+                // ],
+                // "wrapped_statuses": ["ACTIVE", "INACTIVE"],
+                // "ids": [1, 2, 3]
+            });
+
+        let msg = proto_schema.context.get_message("example.Person").unwrap();
+        let proto_value = MessageValue {
+            msg_ref: msg.self_ref.clone() ,
+            garbage: None,
+            fields: vec![
+                FieldValue {
+                    number: 1,
+                    value: Value::Int32(1),
+                },
+                FieldValue {
+                    number: 2,
+                    value: Value::String("John".to_string()),
+                },
+                FieldValue {
+                    number: 4,
+                    value: Value::Int32(1),
+                },
+                FieldValue {
+                    number: 5,
+                    value: Value::Int32(1),
+                },
+                // FieldValue {
+                //     number: 6,
+                //     value: Value::Message(1),
+                // },
+                // FieldValue {
+                //     number: 7,
+                //     value: Value::Packed(vec![
+                //         Value::Message(1),
+                //         Value::Message(1),
+                //     ]),
+                // },
+                // FieldValue {
+                //     number: 8,
+                //     value: Value::Packed(vec![
+                //         Value::Int32(1),
+                //         Value::Int32(2),
+                //     ]),
+                // },
+                // FieldValue {
+                //     number: 9,
+                //     value: Value::Packed(vec![
+                //         Value::Int32(1),
+                //         Value::Int32(2),
+                //         Value::Int32(3),
+                //     ]),
+                // },
+            ],
+        };
+        let proto_value = proto_value.encode(&proto_schema.context());
+
+        let json = proto_schema.decode_to_json(proto_value.as_ref()).unwrap();
+        assert_eq!(json, expected_json);
+
+
+
     }
 }
