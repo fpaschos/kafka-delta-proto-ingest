@@ -1,6 +1,6 @@
 use deltalake::arrow::datatypes::{DataType, Field as ArrowField, Schema as ArrowSchema};
 use protofish::context::{Context, MessageField, MessageInfo, Multiplicity, ValueType};
-use protofish::decode::MessageValue;
+use protofish::decode::{MessageValue, PackedArray};
 use protofish::prelude::{FieldValue, Value};
 use serde_json::{json, to_value, Value as JsonValue};
 
@@ -147,7 +147,24 @@ pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: M
 
         if let Some(field_info) = info.get_field(field_value.number) {
             let decoded = decode_field_to_json(ctx, field_value, &info.full_name)?;
-            json.insert(field_info.name.clone(), decoded);
+
+            // Handle repeted fields
+            if field_info.multiplicity == Multiplicity::Repeated {
+                if let Some(JsonValue::Array(values)) = json.get_mut(&field_info.name) {
+                    values.push(decoded);
+                } else {
+                    // An array of values does not exist create a new one and append the new value
+                    let new_array = JsonValue::Array(vec![decoded]);
+                    json.insert(field_info.name.clone(), new_array);
+                }
+
+            } else if field_info.multiplicity == Multiplicity::RepeatedPacked {
+                json.insert(field_info.name.clone(), decoded);
+            } else {
+                // Single or Optional fields
+                json.insert(field_info.name.clone(), decoded);
+
+            }
         } else {
             return Err(SchemaRegistryError::DecodeJsonError(format!("Missing field number {} in {} proto message definition.", field_value.number, info.full_name)));
         }
@@ -178,29 +195,76 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 
         Value::Enum(v) => {
             let enum_info = ctx.resolve_enum(v.enum_ref);
-            let enum_value =  enum_info.get_field_by_value(v.value).ok_or(SchemaRegistryError::DecodeJsonError("Enum value not found".to_string()))?.name.clone();
+            let enum_value =  enum_info.get_field_by_value(v.value)
+                .ok_or(SchemaRegistryError::DecodeJsonError("Enum value not found".to_string()))?
+                .name
+                .clone();
             Ok(JsonValue::String(enum_value))
         },
-        Value::Message(_) => { todo!("Message unimplemented") },
-        Value::Packed(_) => { todo!("Packed unimplementd") },
+        Value::Message(v) => {
+            let info = ctx.resolve_message(v.msg_ref);
+            decode_message_to_json(ctx, &info, *v)
+        },
+        Value::Packed(packed_array) => {
+            // TODO support enum arrays
+            match packed_array {
+                PackedArray::Double(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Float(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Int32(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Int64(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::UInt32(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::UInt64(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::SInt32(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::SInt64(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Fixed32(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Fixed64(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::SFixed32(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::SFixed64(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))
+                }
+                PackedArray::Bool(v) => {
+                    let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
+                    Ok(JsonValue::Array(vs))}
+            }
+        },
 
 
         Value::Incomplete(_,_) => Err(SchemaRegistryError::DecodeJsonError("Incomplete field not supported".to_string())),
         Value::Unknown(_) => Err(SchemaRegistryError::DecodeJsonError("Unknown field not supported".to_string())),
-
-
-        // protofish::prelude::FieldValue::Enum(v) => {
-        //     let enum_info = ctx.get_enum(*v).ok_or(SchemaRegistryError::DecodeJsonError(format!("Enum value {} not found", v)))?;
-        //     let field = enum_info.get_field_by_value(*v).ok_or(SchemaRegistryError::DecodeJsonError(format!("Enum value {} not found", v)))?;
-        //     Ok(JsonValue::String(field.name.clone()))
-        // }
-        // protofish::prelude::FieldValue::Message(v) => {
-        //     let info = ctx.resolve_message(*v);
-        //     let value = ctx.decode(info.self_ref, &field.bytes);
-        //     decode_message_to_json(ctx, &info, &value)
-        // }
-
-
     }
 }
 
@@ -325,27 +389,29 @@ mod tests {
                 "name": "John",
                 "status": "ACTIVE",
                 "wrapped_status": "ACTIVE",
-                // "details": {
-                //     "age": 30,
-                //     "salary": 100000
-                // },
-                // "contacts": [
-                //     {
-                //         "address": "123 Main St",
-                //         "phone": "555-555-5555",
-                //         "email": "test@test.com"
-                //     },
-                //     {
-                //         "address": "456 Elm St",
-                //         "phone": "555-555-5555",
-                //         "email": "test@test.com"
-                //     }
-                // ],
+                "details": {
+                    "age": 30,
+                    "salary": 100000,
+                },
+                "contacts": [
+                    {
+                        "address": "123 Main St",
+                        "phone": "555-555-5555",
+                        "email": "test@test.com"
+                    },
+                    {
+                        "address": "456 Elm St",
+                        "phone": "555-555-5555",
+                        "email": "test@test.com"
+                    }
+                ],
                 // "wrapped_statuses": ["ACTIVE", "INACTIVE"],
-                // "ids": [1, 2, 3]
+                "ids": [1, 2, 3]
             });
 
         let msg = proto_schema.context.get_message("example.Person").unwrap();
+        let msg_detail = proto_schema.context.get_message("example.Details").unwrap();
+        let msg_contact = proto_schema.context.get_message("example.Contact").unwrap();
         let proto_value = MessageValue {
             msg_ref: msg.self_ref.clone() ,
             garbage: None,
@@ -366,32 +432,71 @@ mod tests {
                     number: 5,
                     value: Value::Int32(1),
                 },
-                // FieldValue {
-                //     number: 6,
-                //     value: Value::Message(1),
-                // },
-                // FieldValue {
-                //     number: 7,
-                //     value: Value::Packed(vec![
-                //         Value::Message(1),
-                //         Value::Message(1),
-                //     ]),
-                // },
-                // FieldValue {
-                //     number: 8,
-                //     value: Value::Packed(vec![
-                //         Value::Int32(1),
-                //         Value::Int32(2),
-                //     ]),
-                // },
-                // FieldValue {
-                //     number: 9,
-                //     value: Value::Packed(vec![
-                //         Value::Int32(1),
-                //         Value::Int32(2),
-                //         Value::Int32(3),
-                //     ]),
-                // },
+                FieldValue {
+                    number: 6,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: msg_detail.self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::UInt32(30),
+                            },
+                            FieldValue {
+                                number: 2,
+                                value: Value::UInt64(100000),
+                            },
+                        ],
+                    })),
+                },
+                FieldValue {
+                    number: 7,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: msg_contact.self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::String("123 Main St".into())
+                            },
+                            FieldValue {
+                                number: 2,
+                                value: Value::String("555-555-5555".into())
+                            },
+                            FieldValue {
+                                number: 3,
+                                value: Value::String("test@test.com".into())
+                            },
+                        ]
+
+                    }))
+                },
+                FieldValue {
+                    number: 7,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: msg_contact.self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::String("456 Elm St".into())
+                            },
+                            FieldValue {
+                                number: 2,
+                                value: Value::String("555-555-5555".into())
+                            },
+                            FieldValue {
+                                number: 3,
+                                value: Value::String("test@test.com".into())
+                            },
+                        ]
+
+                    }))
+                },
+                FieldValue{
+                    number: 9,
+                    value: Value::Packed(PackedArray::Int32(vec![1,2,3]))
+                }
             ],
         };
         let proto_value = proto_value.encode(&proto_schema.context());
