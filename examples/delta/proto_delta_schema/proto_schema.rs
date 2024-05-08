@@ -271,6 +271,8 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use protofish::context::TypeInfo;
+    use protofish::decode::EnumValue;
 
     use serde_json::json;
     use serde_json::Value as JsonValue;
@@ -292,6 +294,7 @@ mod tests {
                 repeated Contact contacts = 7;
                 repeated WrappedStatus.Enum wrapped_statuses = 8;
                 repeated int32 ids = 9;
+                repeated Status statuses = 10;
             }
 
             enum Status  {
@@ -405,13 +408,15 @@ mod tests {
                         "email": "test@test.com"
                     }
                 ],
-                // "wrapped_statuses": ["ACTIVE", "INACTIVE"],
+                "wrapped_statuses": ["ACTIVE", "INACTIVE"],
                 "ids": [1, 2, 3]
             });
 
         let msg = proto_schema.context.get_message("example.Person").unwrap();
         let msg_detail = proto_schema.context.get_message("example.Details").unwrap();
         let msg_contact = proto_schema.context.get_message("example.Contact").unwrap();
+        let TypeInfo::Enum(wrapped_status) = proto_schema.context.get_type("example.WrappedStatus.Enum").unwrap() else { panic!("Expected enum WrappedStatus type info")};
+
         let proto_value = MessageValue {
             msg_ref: msg.self_ref.clone() ,
             garbage: None,
@@ -492,6 +497,20 @@ mod tests {
                         ]
 
                     }))
+                },
+                FieldValue{
+                    number: 8,
+                    value: Value::Enum(EnumValue {
+                        enum_ref: wrapped_status.self_ref.clone(),
+                        value: 1,
+                    })
+                },
+                FieldValue{
+                    number: 8,
+                    value: Value::Enum(EnumValue {
+                        enum_ref: wrapped_status.self_ref.clone(),
+                        value: 2,
+                    })
                 },
                 FieldValue{
                     number: 9,
