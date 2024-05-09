@@ -1,5 +1,5 @@
 [package]
-name = "schema_registry"
+name = "schema-registry"
 description = "Confluent schema registry wrapper for protobuf support"
 edition = "2021"
 version = { workspace = true }

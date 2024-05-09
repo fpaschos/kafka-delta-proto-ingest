@@ -2357,7 +2357,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "schema_registry"
+name = "schema-registry"
 version = "0.1.0"
 dependencies = [
  "anyhow",

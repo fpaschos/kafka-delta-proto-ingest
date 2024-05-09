@@ -46,14 +46,14 @@ impl From<protofish::context::ParseError> for SchemaRegistryError {
 
 type SharedFutureSchema = Shared<BoxFuture<'static, Result<Arc<Vec<String>>, SchemaRegistryError>>>;
 
-pub struct SchemaRegistryContext {
+pub struct SchemaRegistry {
     settings: SrSettings,
     schemas: DashMap<u32, Arc<Vec<String>>>,
     cache: DashMap<u32, SharedFutureSchema>,
     compiled_schemas: DashMap<u32, Arc<ProtoSchema>>,
 }
 
-impl SchemaRegistryContext {
+impl SchemaRegistry {
     pub fn new(settings: SrSettings) -> Self {
         Self {
             settings,
@@ -175,7 +175,7 @@ mod tests {
     pub async fn test() {
         let settings = SrSettings::new(SCHEMA_REGISTRY_URL.to_string());
 
-        let registry = SchemaRegistryContext::new(settings);
+        let registry = SchemaRegistry::new(settings);
         registry.insert_raw_schemas(80, vec![get_proto_sample().to_string()]).unwrap();
 
         let res = registry.compiled_schema_of(80).await.unwrap();

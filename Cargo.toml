@@ -4,7 +4,7 @@
 [workspace]
 members = [
     "crates/ingest-cli",
-    "crates/schema_registry"
+    "crates/schema-registry"
 ]
 
 resolver = "2"
