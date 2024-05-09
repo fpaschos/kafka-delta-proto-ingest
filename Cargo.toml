@@ -1,45 +1,66 @@
-[package]
-name = "kafka-delta-proto-ingest"
+#[package]
+
+
+[workspace]
+members = [
+    "crates/ingest-cli",
+    "crates/schema_registry"
+]
+
+resolver = "2"
+
+[workspace.package]
+authors = ["Fotis Paschos <fpaschos@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+rust-version = "1.78.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.82"
-rdkafka = "0.36.2"
 thiserror = "1.0.58"
-tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.37.0", default-features = false, features = ["macros"] }
 tokio-util = "0.7.10"
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"]}
-url = "2.5.0"
 futures-util = "0.3.30"
 futures = "0.3.30"
-schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
-protofish = "0.5.2"
-deltalake = { version = "0.17.1", features = ["datafusion"] }
 serde = "1.0.198"
 serde_json = "1.0.116"
 dashmap = "5.5.3"
+deltalake = { version = "0.17.1", features = ["datafusion"] }
 
 
-[[example]]
-name = "create-table"
-path = "examples/delta/create_table/main.rs"
 
-[[example]]
-name = "write-table"
-path = "examples/delta/write_table/main.rs"
 
-[[example]]
-name = "read-table"
-path = "examples/delta/read_table/main.rs"
+tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"]}
+url = "2.5.0"
 
-[[example]]
-name= "proto-delta-schema"
-path = "examples/delta/proto_delta_schema/main.rs"
+schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
+protofish = "0.5.2"
+
+rdkafka = "0.36.2"
+
+
+#
+#[[example]]
+#name = "create-table"
+#path = "examples/delta/create_table/main.rs"
+#
+#[[example]]
+#name = "write-table"
+#path = "examples/delta/write_table/main.rs"
+#
+#[[example]]
+#name = "read-table"
+#path = "examples/delta/read_table/main.rs"
+#
+#[[example]]
+#name= "proto-delta-schema"
+#path = "examples/delta/proto_delta_schema/main.rs"
 
 
 [profile.release]
+codegen-units = 1
 lto = true

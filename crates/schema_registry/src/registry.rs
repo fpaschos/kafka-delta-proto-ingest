@@ -44,12 +44,12 @@ impl From<protofish::context::ParseError> for SchemaRegistryError {
     }
 }
 
-type SharedFutureSchema<'a> = Shared<BoxFuture<'a, Result<Arc<Vec<String>>, SchemaRegistryError>>>;
+type SharedFutureSchema = Shared<BoxFuture<'static, Result<Arc<Vec<String>>, SchemaRegistryError>>>;
 
 pub struct SchemaRegistryContext {
     settings: SrSettings,
     schemas: DashMap<u32, Arc<Vec<String>>>,
-    cache: DashMap<u32, SharedFutureSchema<'static>>,
+    cache: DashMap<u32, SharedFutureSchema>,
     compiled_schemas: DashMap<u32, Arc<ProtoSchema>>,
 }
 
@@ -93,7 +93,7 @@ impl SchemaRegistryContext {
         Ok(compiled)
     }
 
-    fn get_schemas_by_shared_future(&self, id: u32) -> SharedFutureSchema<'static> {
+    fn get_schemas_by_shared_future(&self, id: u32) -> SharedFutureSchema {
         match self.cache.entry(id) {
             Entry::Occupied(e) => e.get().clone(),
             Entry::Vacant(e) => {
@@ -146,6 +146,8 @@ fn get_all_schemas_recursive<'a>(
 mod tests {
     use super::*;
 
+    const SCHEMA_REGISTRY_URL: &str = "http://localhost:58085/";
+
     fn get_proto_sample() -> &'static str {
         r#"
         syntax = "proto3";
@@ -171,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     pub async fn test() {
-        let settings = SrSettings::new(crate::SCHEMA_REGISTRY_URL.to_string());
+        let settings = SrSettings::new(SCHEMA_REGISTRY_URL.to_string());
 
         let registry = SchemaRegistryContext::new(settings);
         registry.insert_raw_schemas(80, vec![get_proto_sample().to_string()]).unwrap();
@@ -179,13 +181,13 @@ mod tests {
         let res = registry.compiled_schema_of(80).await.unwrap();
 
         let ctx = &res.context;
-        let info = ctx.get_message("model.Task").unwrap();
+        let _info = ctx.get_message("model.Task").unwrap();
 
 
         // res.context.
 
-        println!("{:?}", res);
-        println!("{:?}", info);
+        // println!("{:?}", res);
+        // println!("{:?}", info);
 
         // let arrow_schema = res.to_arrow_schema().unwrap();
         // println!("{:?}", arrow_schema);

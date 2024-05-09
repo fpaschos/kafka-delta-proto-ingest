@@ -1,0 +1,24 @@
+[package]
+name = "schema_registry"
+description = "Confluent schema registry wrapper for protobuf support"
+edition = "2021"
+version = { workspace = true }
+readme = "README.md"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+futures-util = { workspace = true }
+dashmap = { workspace = true }
+
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+deltalake = { workspace = true }
+
+schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
+protofish = "0.5.2"

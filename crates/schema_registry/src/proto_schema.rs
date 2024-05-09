@@ -270,12 +270,10 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use protofish::context::TypeInfo;
     use protofish::decode::EnumValue;
 
     use serde_json::json;
-    use serde_json::Value as JsonValue;
     use protofish::prelude::{Value, MessageValue, FieldValue};
 
     use super::*;
