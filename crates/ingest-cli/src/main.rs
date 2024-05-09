@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use kafka_delta_proto_ingest::{IngestOptions, MessageFormat, start_ingest};
+use ingest_cli::{IngestOptions, MessageFormat, start_ingest};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use kafka_delta_proto_ingest::SchemaSource::SchemaRegistry;
+use ingest_cli::SchemaSource::SchemaRegistry;
 
 // TODO add clap and cli commands
 // TODO add tracing json via cli param see: https://github.com/tokio-rs/tracing/blob/master/examples/examples/toggle-subscribers.rs

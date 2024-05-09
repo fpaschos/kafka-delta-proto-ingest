@@ -1,0 +1,26 @@
+[package]
+name = "ingest-cli"
+version = { workspace = true }
+edition = "2021"
+authors = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true }
+
+
+
+
+# TODO remove in favor of schema-registry
+schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
+
+tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
+url = "2.5.0"
+rdkafka = "0.36.2"

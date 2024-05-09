@@ -270,17 +270,15 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use protofish::context::TypeInfo;
     use protofish::decode::EnumValue;
 
     use serde_json::json;
-    use serde_json::Value as JsonValue;
     use protofish::prelude::{Value, MessageValue, FieldValue};
 
     use super::*;
 
-    fn schemas_sample() -> Vec<String> {
+    fn simple_schema_sample() -> Vec<String> {
         vec![
             r#"
             syntax = "proto3";
@@ -326,16 +324,16 @@ mod tests {
     }
 
     #[test]
-    fn compiled_proto() {
-        let raw_schemas = schemas_sample();
+    fn compile_simple_schema() {
+        let raw_schemas = simple_schema_sample();
         let proto_schema = ProtoSchema::try_compile(&raw_schemas);
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
         assert_eq!(proto_schema.full_name, "".to_string());
     }
 
     #[test]
-    fn compiled_proto_and_generate_arrow_schema() {
-        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), schemas_sample().as_slice());
+    fn simple_schema_to_arrow() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), simple_schema_sample().as_slice());
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
         let arrow_schema = proto_schema.to_arrow_schema().expect("Can generate arrow schema from proto schema");
 
@@ -383,8 +381,8 @@ mod tests {
     }
 
     #[test]
-    fn proto_message_to_json() {
-        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), schemas_sample().as_slice());
+    fn simple_schema_message_to_json() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), simple_schema_sample().as_slice());
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
 
         let expected_json = json!({
@@ -522,8 +520,5 @@ mod tests {
 
         let json = proto_schema.decode_to_json(proto_value.as_ref()).unwrap();
         assert_eq!(json, expected_json);
-
-
-
     }
 }
