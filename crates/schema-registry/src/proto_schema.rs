@@ -1,13 +1,14 @@
 use std::collections::HashSet;
+
 use deltalake::arrow::datatypes::{DataType, Field as ArrowField, Schema as ArrowSchema};
 use protofish::context::{Context, MessageField, MessageInfo, Multiplicity, ValueType};
 use protofish::decode::{MessageValue, PackedArray};
 use protofish::prelude::{FieldValue, Value};
 use serde_json::{json, to_value, Value as JsonValue};
-use crate::proto_common_types::add_common_files;
 
-use crate::registry::SchemaRegistryError;
+use crate::proto_common_types::add_common_files;
 use crate::proto_resolver::ProtoResolver;
+use crate::registry::SchemaRegistryError;
 
 #[derive(Debug)]
 pub struct ProtoSchema {
@@ -23,7 +24,6 @@ impl ProtoSchema {
     }
 
     pub fn try_compile_with_full_name<S: AsRef<str>>(full_name: S, raw_schemas: &[String]) -> Result<Self, SchemaRegistryError> {
-
         let mut schemas = Vec::new();
         for s in raw_schemas {
             let schema_info = ProtoResolver::resolve(s)?;
@@ -129,9 +129,6 @@ pub(crate) fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Resu
             DataType::Utf8
         }
         ValueType::Message(info) => {
-
-            //TODO support google well known types
-
             let info = ctx.resolve_message(info);
 
             if let Some(ty) = try_map_as_well_known_type(&info) {
@@ -185,13 +182,11 @@ pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: M
                     let new_array = JsonValue::Array(vec![decoded]);
                     json.insert(field_info.name.clone(), new_array);
                 }
-
             } else if field_info.multiplicity == Multiplicity::RepeatedPacked {
                 json.insert(field_info.name.clone(), decoded);
             } else {
                 // Single or Optional fields
                 json.insert(field_info.name.clone(), decoded);
-
             }
         } else {
             return Err(SchemaRegistryError::DecodeJsonError(format!("Missing field number {} in {} proto message definition.", field_value.number, info.full_name)));
@@ -200,6 +195,38 @@ pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: M
 
 
     Ok(json)
+}
+
+// TODO maybe return error here Result<Option<...>>
+pub(crate) fn try_decode_json_as_well_known_type(_ctx: &Context, info: &MessageInfo, value: &MessageValue) -> Option<JsonValue> {
+    match info.full_name.as_str() {
+        // Timestamps as Number(i64) in milliseconds
+        "google.protobuf.Timestamp" => {
+            let seconds = if let Some(seconds) = value.fields.get(0) {
+                if let Value::Int64(v) = seconds.value {
+                    v
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            };
+
+            let nanos = if let Some(nanos) = value.fields.get(1) {
+                if let Value::Int32(v) = nanos.value {
+                    v
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            };
+
+            let millis = seconds * 1000 + nanos as i64 / 1_000_000;
+            Some(JsonValue::Number(millis.into()))
+        }
+        _ => None
+    }
 }
 
 pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_full_name: &str) -> Result<JsonValue, SchemaRegistryError> {
@@ -223,16 +250,21 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 
         Value::Enum(v) => {
             let enum_info = ctx.resolve_enum(v.enum_ref);
-            let enum_value =  enum_info.get_field_by_value(v.value)
+            let enum_value = enum_info.get_field_by_value(v.value)
                 .ok_or(SchemaRegistryError::DecodeJsonError("Enum value not found".to_string()))?
                 .name
                 .clone();
             Ok(JsonValue::String(enum_value))
-        },
+        }
         Value::Message(v) => {
             let info = ctx.resolve_message(v.msg_ref);
-            decode_message_to_json(ctx, &info, *v)
-        },
+
+            if let Some(well_known_type) = try_decode_json_as_well_known_type(ctx, &info, &v) {
+                Ok(well_known_type)
+            } else {
+                decode_message_to_json(ctx, &info, *v)
+            }
+        }
         Value::Packed(packed_array) => {
             match packed_array {
                 PackedArray::Double(v) => {
@@ -285,12 +317,12 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
                 }
                 PackedArray::Bool(v) => {
                     let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
-                    Ok(JsonValue::Array(vs))}
+                    Ok(JsonValue::Array(vs))
+                }
             }
-        },
+        }
 
-
-        Value::Incomplete(_,_) => Err(SchemaRegistryError::DecodeJsonError("Incomplete field not supported".to_string())),
+        Value::Incomplete(_, _) => Err(SchemaRegistryError::DecodeJsonError("Incomplete field not supported".to_string())),
         Value::Unknown(_) => Err(SchemaRegistryError::DecodeJsonError("Unknown field not supported".to_string())),
     }
 }
@@ -300,9 +332,9 @@ mod tests {
     use deltalake::arrow::datatypes::TimeUnit;
     use protofish::context::TypeInfo;
     use protofish::decode::EnumValue;
-
+    use protofish::prelude::{FieldValue, MessageValue, Value};
     use serde_json::json;
-    use protofish::prelude::{Value, MessageValue, FieldValue};
+    use serde_json::Value as JsonValue;
 
     use super::*;
 
@@ -441,10 +473,10 @@ mod tests {
         let msg = proto_schema.context.get_message("example.Person").unwrap();
         let msg_detail = proto_schema.context.get_message("example.Details").unwrap();
         let msg_contact = proto_schema.context.get_message("example.Contact").unwrap();
-        let TypeInfo::Enum(wrapped_status) = proto_schema.context.get_type("example.WrappedStatus.Enum").unwrap() else { panic!("Expected enum WrappedStatus type info")};
+        let TypeInfo::Enum(wrapped_status) = proto_schema.context.get_type("example.WrappedStatus.Enum").unwrap() else { panic!("Expected enum WrappedStatus type info") };
 
         let proto_value = MessageValue {
-            msg_ref: msg.self_ref.clone() ,
+            msg_ref: msg.self_ref.clone(),
             garbage: None,
             fields: vec![
                 FieldValue {
@@ -488,19 +520,18 @@ mod tests {
                         fields: vec![
                             FieldValue {
                                 number: 1,
-                                value: Value::String("123 Main St".into())
+                                value: Value::String("123 Main St".into()),
                             },
                             FieldValue {
                                 number: 2,
-                                value: Value::String("555-555-5555".into())
+                                value: Value::String("555-555-5555".into()),
                             },
                             FieldValue {
                                 number: 3,
-                                value: Value::String("test@test.com".into())
+                                value: Value::String("test@test.com".into()),
                             },
-                        ]
-
-                    }))
+                        ],
+                    })),
                 },
                 FieldValue {
                     number: 7,
@@ -510,38 +541,37 @@ mod tests {
                         fields: vec![
                             FieldValue {
                                 number: 1,
-                                value: Value::String("456 Elm St".into())
+                                value: Value::String("456 Elm St".into()),
                             },
                             FieldValue {
                                 number: 2,
-                                value: Value::String("555-555-5555".into())
+                                value: Value::String("555-555-5555".into()),
                             },
                             FieldValue {
                                 number: 3,
-                                value: Value::String("test@test.com".into())
+                                value: Value::String("test@test.com".into()),
                             },
-                        ]
-
-                    }))
+                        ],
+                    })),
                 },
-                FieldValue{
+                FieldValue {
                     number: 8,
                     value: Value::Enum(EnumValue {
                         enum_ref: wrapped_status.self_ref.clone(),
                         value: 1,
-                    })
+                    }),
                 },
-                FieldValue{
+                FieldValue {
                     number: 8,
                     value: Value::Enum(EnumValue {
                         enum_ref: wrapped_status.self_ref.clone(),
                         value: 2,
-                    })
+                    }),
                 },
-                FieldValue{
+                FieldValue {
                     number: 9,
-                    value: Value::Packed(PackedArray::Int32(vec![1,2,3]))
-                }
+                    value: Value::Packed(PackedArray::Int32(vec![1, 2, 3])),
+                },
             ],
         };
         let proto_value = proto_value.encode(&proto_schema.context());
@@ -592,9 +622,8 @@ mod tests {
                 google.protobuf.Timestamp created_date = 5;
                 string created_by = 6;
             }
-            "#.to_string()
+            "#.to_string(),
         ]
-
     }
 
     #[test]
@@ -642,7 +671,7 @@ mod tests {
         assert_eq!(f.data_type(), &DataType::Utf8);
     }
 
-    fn heavy_nested_schema() -> Vec<String> {
+    fn nested_polymorphic_schema() -> Vec<String> {
         vec![
             // shared.proto
             r#"
@@ -672,8 +701,32 @@ mod tests {
 
             import "google/protobuf/timestamp.proto";
 
+
+            message DetailsType {
+                enum Enum {
+                    UNKNOWN = 0;
+                    PHYSICAL = 1;
+                    FINANCIAL = 2;
+                }
+            }
+
+
             message Details {
-                uint32 age = 1;
+                oneof data {
+                    Physical physical = 1;
+                    Financial financial = 2;
+                }
+            }
+
+            message Physical {
+                DetailsType.Enum type = 1;
+                uint32 age = 2;
+                google.protobuf.Timestamp created_date = 3;
+                string created_by = 4;
+            }
+
+            message Financial {
+                DetailsType.Enum type = 1;
                 uint64 salary = 2;
                 google.protobuf.Timestamp created_date = 3;
                 string created_by = 4;
@@ -694,18 +747,200 @@ mod tests {
                 string name = 2;
                 Status.Enum status = 3;
                 repeated Contact contacts = 4;
-                details example.details.Details = 5;
+                example.details.Details details = 5;
             }
-
-            "#.to_string()
+            "#.to_string(),
         ]
     }
 
     #[test]
-    fn compile_heavy_nested_schema() {
-        let raw_schemas = complex_schema();
-        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", &raw_schemas);
+    fn compile_nested_polymorphic_schema() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", nested_polymorphic_schema().as_slice());
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
         assert_eq!(&proto_schema.full_name, "example.Person");
+    }
+
+    #[test]
+    fn nested_polymorphic_schema_to_arrow() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", nested_polymorphic_schema().as_slice());
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+        let arrow_schema = proto_schema.to_arrow_schema().expect("Can generate arrow schema from proto schema");
+
+        let f = arrow_schema.field(0);
+        assert_eq!(f.name(), "id");
+        assert_eq!(f.data_type(), &DataType::Int32);
+        assert!(f.is_nullable());
+
+        let f = arrow_schema.field(1);
+        assert_eq!(f.name(), "name");
+        assert_eq!(f.data_type(), &DataType::Utf8);
+
+        let f = arrow_schema.field(2);
+        assert_eq!(f.name(), "status");
+        assert_eq!(f.data_type(), &DataType::Utf8);
+
+        let f = arrow_schema.field(3);
+        assert_eq!(f.name(), "contacts");
+        assert_eq!(f.data_type(), &DataType::List(ArrowField::new("element".to_string(),
+                                                                  DataType::Struct(vec![
+                                                                      ArrowField::new("address".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("phone".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("email".to_string(), DataType::Utf8, true), ].into()
+                                                                  ), false).into()));
+
+        let f = arrow_schema.field(4);
+        assert_eq!(f.name(), "details");
+        assert_eq!(f.data_type(), &DataType::Struct(vec![
+            ArrowField::new("physical".to_string(), DataType::Struct(vec![
+                ArrowField::new("type".to_string(), DataType::Utf8, true),
+                ArrowField::new("age".to_string(), DataType::UInt32, true),
+                ArrowField::new("created_date".to_string(), DataType::Timestamp(TimeUnit::Millisecond, None), true),
+                ArrowField::new("created_by".to_string(), DataType::Utf8, true),
+            ].into()), true),
+            ArrowField::new("financial".to_string(), DataType::Struct(vec![
+                ArrowField::new("type".to_string(), DataType::Utf8, true),
+                ArrowField::new("salary".to_string(), DataType::UInt64, true),
+                ArrowField::new("created_date".to_string(), DataType::Timestamp(TimeUnit::Millisecond, None), true),
+                ArrowField::new("created_by".to_string(), DataType::Utf8, true),
+            ].into()), true),
+        ].into()));
+    }
+
+    #[test]
+    fn nested_polymorphic_schema_message_to_json() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), nested_polymorphic_schema().as_slice());
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+
+        let expected_json = json!({
+                    "id": 1,
+                    "name": "John",
+                    "status": "ACTIVE",
+                    "contacts": [
+                        {
+                            "address": "123 Main St",
+                            "phone": "555-555-5555",
+                            "email": "test@test.com"
+                            }
+                    ],
+                    "details": {
+                        "physical": {
+                            "type": "PHYSICAL",
+                            "age": 30,
+                            "created_date": JsonValue::Number((1715276726099 as i64).into()),
+                            "created_by": "123e4567-e89b-12d3-a456-426614174000"
+                        }
+                    }
+                });
+
+        // Construct physical message value
+        let msg_physical = proto_schema.context.get_message("example.details.Physical").unwrap();
+        let TypeInfo::Enum(details_type) = proto_schema.context.get_type("example.details.DetailsType.Enum").unwrap()
+            else { panic!("Expected enum DetailsType type info") };
+        let TypeInfo::Message(timestamp) = proto_schema.context.get_type("google.protobuf.Timestamp").unwrap()
+            else { panic!("Expected message Timestamp type info") };
+        let physical_value = MessageValue {
+            msg_ref: msg_physical.self_ref.clone(),
+            garbage: None,
+            fields: vec![
+                FieldValue {
+                    number: 1,
+                    value: Value::Enum(EnumValue {
+                        enum_ref: details_type.self_ref.clone(),
+                        value: 1,
+                    }),
+                },
+                FieldValue {
+                    number: 2,
+                    value: Value::UInt32(30),
+                },
+                FieldValue {
+                    number: 3,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: timestamp.self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::Int64(1715276726),
+                            },
+                            FieldValue {
+                                number: 2,
+                                value: Value::Int32(99_000_000), // 99 milliseconds
+                            },
+                        ]
+                    })),
+                },
+                FieldValue {
+                    number: 4,
+                    value: Value::String("123e4567-e89b-12d3-a456-426614174000".to_string()),
+                }
+            ]
+        };
+
+        // Construct person message value
+        let msg = proto_schema.context.get_message("example.Person").unwrap();
+        let msg_detail = proto_schema.context.get_message("example.details.Details").unwrap();
+        let TypeInfo::Enum(status) = proto_schema.context.get_type("example.Status.Enum").unwrap() else { panic!("Expected enum Status type info") };
+
+        let proto_value = MessageValue {
+            msg_ref: msg.self_ref.clone(),
+            garbage: None,
+            fields: vec![
+                FieldValue {
+                    number: 1,
+                    value: Value::Int32(1),
+                },
+                FieldValue {
+                    number: 2,
+                    value: Value::String("John".to_string()),
+                },
+                FieldValue {
+                    number: 3,
+                    value: Value::Enum(EnumValue {
+                        enum_ref: status.self_ref.clone(),
+                        value: 1,
+                    }),
+                },
+                FieldValue {
+                    number: 4,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: proto_schema.context.get_message("example.Contact").unwrap().self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::String("123 Main St".into()),
+                            },
+                            FieldValue {
+                                number: 2,
+                                value: Value::String("555-555-5555".into()),
+                            },
+                            FieldValue {
+                                number: 3,
+                                value: Value::String("test@test.com".into()),
+                            }
+                        ]
+                    })),
+
+                },
+                FieldValue {
+                    number: 5,
+                    value: Value::Message(Box::new(MessageValue {
+                        msg_ref: msg_detail.self_ref.clone(),
+                        garbage: None,
+                        fields: vec![
+                            FieldValue {
+                                number: 1,
+                                value: Value::Message(Box::new(physical_value)),
+                            }
+                        ]
+                    })),
+                }
+            ]
+        };
+
+        let proto_value = proto_value.encode(&proto_schema.context());
+        let json = proto_schema.decode_to_json(proto_value.as_ref()).unwrap();
+        assert_eq!(json, expected_json);
     }
 }
