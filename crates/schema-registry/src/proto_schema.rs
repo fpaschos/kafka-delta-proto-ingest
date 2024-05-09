@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use deltalake::arrow::datatypes::{DataType, Field as ArrowField, Schema as ArrowSchema};
 use protofish::context::{Context, MessageField, MessageInfo, Multiplicity, ValueType};
 use protofish::decode::{MessageValue, PackedArray};
 use protofish::prelude::{FieldValue, Value};
 use serde_json::{json, to_value, Value as JsonValue};
+use crate::proto_common_types::add_common_files;
 
 use crate::registry::SchemaRegistryError;
+use crate::proto_resolver::ProtoResolver;
 
 #[derive(Debug)]
 pub struct ProtoSchema {
@@ -19,11 +22,22 @@ impl ProtoSchema {
         Self::try_compile_with_full_name("".to_string(), raw_schemas)
     }
 
-    pub fn try_compile_with_full_name(full_name: String, raw_schemas: &[String]) -> Result<Self, SchemaRegistryError> {
-        let context = Context::parse(raw_schemas)?;
+    pub fn try_compile_with_full_name<S: AsRef<str>>(full_name: S, raw_schemas: &[String]) -> Result<Self, SchemaRegistryError> {
+
+        let mut schemas = Vec::new();
+        for s in raw_schemas {
+            let schema_info = ProtoResolver::resolve(s)?;
+            add_common_files(schema_info.imports(), &mut schemas);
+            schemas.push(s.to_string());
+        }
+
+        let unique_schemas: HashSet<String> = schemas.into_iter().collect();
+
+
+        let context = Context::parse(unique_schemas)?;
         Ok(Self {
             context,
-            full_name,
+            full_name: full_name.as_ref().to_string(),
         })
     }
 
@@ -119,12 +133,17 @@ pub(crate) fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Resu
             //TODO support google well known types
 
             let info = ctx.resolve_message(info);
-            let mut fields = vec![];
-            for f in info.iter_fields() {
-                let field = message_field_to_arrow(ctx, f)?;
-                fields.push(field);
+
+            if let Some(ty) = try_map_as_well_known_type(&info) {
+                ty
+            } else {
+                let mut fields = vec![];
+                for f in info.iter_fields() {
+                    let field = message_field_to_arrow(ctx, f)?;
+                    fields.push(field);
+                }
+                DataType::Struct(fields.into())
             }
-            DataType::Struct(fields.into())
         }
     };
 
@@ -140,6 +159,15 @@ pub(crate) fn message_field_to_arrow(ctx: &Context, info: &MessageField) -> Resu
     }
 }
 
+/// Maps google well known types to Arrow data types.
+/// Returns None if the message is not a well known type.
+pub(crate) fn try_map_as_well_known_type(info: &MessageInfo) -> Option<DataType> {
+    match info.full_name.as_str() {
+        "google.protobuf.Timestamp" => Some(DataType::Timestamp(deltalake::arrow::datatypes::TimeUnit::Millisecond, None)),
+        _ => None
+    }
+}
+
 pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: MessageValue) -> Result<JsonValue, SchemaRegistryError> {
     let mut json = json!({});
     for field_value in value.fields {
@@ -148,7 +176,7 @@ pub(crate) fn decode_message_to_json(ctx: &Context, info: &MessageInfo, value: M
         if let Some(field_info) = info.get_field(field_value.number) {
             let decoded = decode_field_to_json(ctx, field_value, &info.full_name)?;
 
-            // Handle repeted fields
+            // Handle repeated fields
             if field_info.multiplicity == Multiplicity::Repeated {
                 if let Some(JsonValue::Array(values)) = json.get_mut(&field_info.name) {
                     values.push(decoded);
@@ -206,7 +234,6 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
             decode_message_to_json(ctx, &info, *v)
         },
         Value::Packed(packed_array) => {
-            // TODO support enum arrays
             match packed_array {
                 PackedArray::Double(v) => {
                     let vs: Vec<JsonValue> = v.into_iter().map(|v| v.into()).collect();
@@ -270,6 +297,7 @@ pub(crate) fn decode_field_to_json(ctx: &Context, field: FieldValue, _parent_ful
 
 #[cfg(test)]
 mod tests {
+    use deltalake::arrow::datatypes::TimeUnit;
     use protofish::context::TypeInfo;
     use protofish::decode::EnumValue;
 
@@ -333,7 +361,7 @@ mod tests {
 
     #[test]
     fn simple_schema_to_arrow() {
-        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person".to_string(), simple_schema_sample().as_slice());
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", simple_schema_sample().as_slice());
         let proto_schema = proto_schema.expect("A valid proto3 raw schema");
         let arrow_schema = proto_schema.to_arrow_schema().expect("Can generate arrow schema from proto schema");
 
@@ -520,5 +548,164 @@ mod tests {
 
         let json = proto_schema.decode_to_json(proto_value.as_ref()).unwrap();
         assert_eq!(json, expected_json);
+    }
+
+    fn complex_schema() -> Vec<String> {
+        vec![
+            // shared.proto
+            r#"
+            syntax = "proto3";
+
+            package example;
+
+            message Status {
+                enum Enum {
+                    UNKNOWN = 0;
+                    ACTIVE = 1;
+                    INACTIVE = 2;
+                }
+            }
+
+            message Contact {
+                string address = 1;
+                string phone = 2;
+                string email = 3;
+            }
+            "#.to_string(),
+
+            // person.proto
+            r#"
+            syntax = "proto3";
+
+            package example;
+
+            import "google/protobuf/timestamp.proto";
+            import "shared.proto";
+
+
+            message Person {
+                int32 id = 1;
+                string name = 2;
+                Status.Enum status = 3;
+                repeated Contact contacts = 4;
+
+                google.protobuf.Timestamp created_date = 5;
+                string created_by = 6;
+            }
+            "#.to_string()
+        ]
+
+    }
+
+    #[test]
+    fn compile_complex_schema() {
+        let raw_schemas = complex_schema();
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", &raw_schemas);
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+        assert_eq!(&proto_schema.full_name, "example.Person");
+    }
+
+    #[test]
+    fn complex_schema_to_arrow() {
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", complex_schema().as_slice());
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+        let arrow_schema = proto_schema.to_arrow_schema().expect("Can generate arrow schema from proto schema");
+
+        let f = arrow_schema.field(0);
+        assert_eq!(f.name(), "id");
+        assert_eq!(f.data_type(), &DataType::Int32);
+        assert!(f.is_nullable());
+
+        let f = arrow_schema.field(1);
+        assert_eq!(f.name(), "name");
+        assert_eq!(f.data_type(), &DataType::Utf8);
+
+        let f = arrow_schema.field(2);
+        assert_eq!(f.name(), "status");
+        assert_eq!(f.data_type(), &DataType::Utf8);
+
+        let f = arrow_schema.field(3);
+        assert_eq!(f.name(), "contacts");
+        assert_eq!(f.data_type(), &DataType::List(ArrowField::new("element".to_string(),
+                                                                  DataType::Struct(vec![
+                                                                      ArrowField::new("address".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("phone".to_string(), DataType::Utf8, true),
+                                                                      ArrowField::new("email".to_string(), DataType::Utf8, true), ].into()
+                                                                  ), false).into()));
+
+        let f = arrow_schema.field(4);
+        assert_eq!(f.name(), "created_date");
+        assert_eq!(f.data_type(), &DataType::Timestamp(TimeUnit::Millisecond, None));
+
+        let f = arrow_schema.field(5);
+        assert_eq!(f.name(), "created_by");
+        assert_eq!(f.data_type(), &DataType::Utf8);
+    }
+
+    fn heavy_nested_schema() -> Vec<String> {
+        vec![
+            // shared.proto
+            r#"
+            syntax = "proto3";
+
+            package example;
+
+            message Status {
+                enum Enum {
+                    UNKNOWN = 0;
+                    ACTIVE = 1;
+                    INACTIVE = 2;
+                }
+            }
+
+            message Contact {
+                string address = 1;
+                string phone = 2;
+                string email = 3;
+            }
+            "#.to_string(),
+
+            // details.proto
+            r#"
+            syntax = "proto3";
+            package example.details;
+
+            import "google/protobuf/timestamp.proto";
+
+            message Details {
+                uint32 age = 1;
+                uint64 salary = 2;
+                google.protobuf.Timestamp created_date = 3;
+                string created_by = 4;
+            }
+            "#.to_string(),
+
+            // person.proto
+            r#"
+            syntax = "proto3";
+
+            package example;
+
+            import "shared.proto";
+            import "details.proto";
+
+            message Person {
+                int32 id = 1;
+                string name = 2;
+                Status.Enum status = 3;
+                repeated Contact contacts = 4;
+                details example.details.Details = 5;
+            }
+
+            "#.to_string()
+        ]
+    }
+
+    #[test]
+    fn compile_heavy_nested_schema() {
+        let raw_schemas = complex_schema();
+        let proto_schema = ProtoSchema::try_compile_with_full_name("example.Person", &raw_schemas);
+        let proto_schema = proto_schema.expect("A valid proto3 raw schema");
+        assert_eq!(&proto_schema.full_name, "example.Person");
     }
 }

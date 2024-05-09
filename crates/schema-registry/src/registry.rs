@@ -50,7 +50,7 @@ pub struct SchemaRegistry {
     settings: SrSettings,
     schemas: DashMap<u32, Arc<Vec<String>>>,
     cache: DashMap<u32, SharedFutureSchema>,
-    compiled_schemas: DashMap<u32, Arc<ProtoSchema>>,
+    _proto_schemas: DashMap<u32, Arc<ProtoSchema>>,
 }
 
 impl SchemaRegistry {
@@ -59,7 +59,7 @@ impl SchemaRegistry {
             settings,
             schemas: DashMap::new(),
             cache: DashMap::new(),
-            compiled_schemas: DashMap::new(),
+            _proto_schemas: DashMap::new(),
         }
     }
 

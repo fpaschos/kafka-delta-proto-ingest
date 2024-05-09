@@ -2482,6 +2482,7 @@ dependencies = [
  "dashmap",
  "deltalake",
  "futures-util",
+ "logos",
  "protofish",
  "schema_registry_converter",
  "serde_json",
