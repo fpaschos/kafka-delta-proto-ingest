@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test() {
+    pub async fn connect_to_kafka_registry() {
         let settings = SrSettings::new(SCHEMA_REGISTRY_URL.to_string());
 
         let registry = SchemaRegistry::new(settings);

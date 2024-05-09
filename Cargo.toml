@@ -32,16 +32,9 @@ dashmap = "5.5.3"
 deltalake = { version = "0.17.1", features = ["datafusion"] }
 
 
-
-
-tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"]}
-url = "2.5.0"
-
-schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
-protofish = "0.5.2"
-
-rdkafka = "0.36.2"
-
+[profile.release]
+codegen-units = 1
+lto = true
 
 #
 #[[example]]
@@ -61,6 +54,4 @@ rdkafka = "0.36.2"
 #path = "examples/delta/proto_delta_schema/main.rs"
 
 
-[profile.release]
-codegen-units = 1
-lto = true
+
