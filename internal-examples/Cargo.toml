@@ -14,6 +14,7 @@ deltalake = { workspace = true , features = ["datafusion"] }
 serde_json = { workspace = true }
 
 schema-registry = { path = "../crates/schema-registry" }
+ingest = { path = "../crates/ingest" }
 
 protofish = "0.5.2"
 

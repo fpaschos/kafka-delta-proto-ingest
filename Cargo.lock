@@ -1455,12 +1455,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ingest-cli"
+name = "ingest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "deltalake",
  "rdkafka",
  "schema_registry_converter",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -1499,6 +1501,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "deltalake",
+ "ingest",
  "protofish",
  "schema-registry",
  "serde_json",

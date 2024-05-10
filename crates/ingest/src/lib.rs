@@ -1,5 +1,6 @@
 mod ingest;
 mod deserialize;
+mod writer;
 
 use std::sync::Arc;
 use rdkafka::{ClientConfig, ClientContext};
@@ -8,6 +9,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use url::Url;
 use crate::ingest::IngestProcessor;
+
+// Re-exports
+pub use writer::{DataWriter, record_batch_from_json};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
@@ -51,8 +55,7 @@ pub enum SchemaSource {
 
 pub struct KafkaContext;
 
-impl ClientContext for KafkaContext {
-}
+impl ClientContext for KafkaContext {}
 
 impl ConsumerContext for KafkaContext {}
 

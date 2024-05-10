@@ -1,19 +1,22 @@
+use std::sync::Arc;
+use deltalake::arrow::datatypes::SchemaRef;
 use deltalake::DeltaOps;
-use deltalake::kernel::{DataType, PrimitiveType, StructField, StructType};
+use deltalake::kernel::StructType;
 use deltalake::protocol::SaveMode;
 use protofish::context::TypeInfo;
 use protofish::decode::EnumValue;
 use protofish::prelude::{FieldValue, MessageValue, Value};
 
 use schema_registry::ProtoSchema;
-use schema_registry::SchemaRegistryError;
+
+use ingest::{record_batch_from_json};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 
     let schema = ProtoSchema::try_compile_with_full_name("example.Person", vec![raw_proto_schema()].as_ref())?;
-    let arrow_schema = schema.to_arrow_schema()?;
-    let delta_schema: StructType = StructType::try_from(&arrow_schema)?;
+    let arrow_schema : SchemaRef = Arc::new(schema.to_arrow_schema()?);
+    let delta_schema: StructType = StructType::try_from(arrow_schema.as_ref())?;
 
     // Uncomment to print the delta schema as json
     // let schema_json= serde_json::to_string(&delta_schema)?;
@@ -21,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
 
     // Create persons table (using overwrite mode for simplicity)
-    let t = DeltaOps::try_from_uri("./data/persons")
+    let _t = DeltaOps::try_from_uri("./data/persons")
         .await?
         .create()
         .with_table_name("person")
@@ -30,19 +33,22 @@ async fn main() -> anyhow::Result<()> {
         .with_columns(delta_schema.fields().to_vec())
         .await?;
 
-    let persons = (0..100).map(|_| {
-        let person = create_random_person_proto_value(&schema);
-        schema.decode_to_json(&person)
-    }).collect::<Result<Vec<_>,_>>()?;
+    // Generate 100 random persons and convert them to json values
+    let persons = (0..1000).map(|_| {
+         create_random_person_proto_value(&schema)
+    }).collect::<Vec<_>>();
+
+    let time = std::time::SystemTime::now();
+    let persons = persons.iter().map(|x| {
+        schema.decode_to_json(x).unwrap()
+    }).collect::<Vec<_>>();
 
     // Write persons to the table
 
-    // Read values and display
-
-
-
-
-
+    let batch_record = record_batch_from_json(arrow_schema, &persons)?;
+    println!("Batch record size {}",batch_record.num_rows());
+    println!("Elapsed time: {:?}", time.elapsed().unwrap());
+    // Read from table and display
 
 
     Ok(())
@@ -113,7 +119,7 @@ fn create_random_person_proto_value(schema: &ProtoSchema) -> Vec<u8> {
     let msg_physical = schema.context.get_message("example.Physical").unwrap();
     let TypeInfo::Enum(details_type) = schema.context.get_type("example.DetailsType.Enum").unwrap()
         else { panic!("Expected enum DetailsType type info") };
-    let TypeInfo::Message(timestamp) = schema.context.get_type("google.protobuf.Timestamp").unwrap()
+    let TypeInfo::Message(_timestamp) = schema.context.get_type("google.protobuf.Timestamp").unwrap()
         else { panic!("Expected message Timestamp type info") };
     let physical_value = MessageValue {
         msg_ref: msg_physical.self_ref.clone(),
