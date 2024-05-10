@@ -1,0 +1,10 @@
+[package]
+name = "internal-examples"
+description = "Examples of internal crates usage"
+edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+readme = "README.md"
+
+
+[dependencies]

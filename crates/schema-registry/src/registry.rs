@@ -87,7 +87,7 @@ impl SchemaRegistry {
         }
     }
 
-    pub async fn compiled_schema_of(&self, id: u32) -> Result<ProtoSchema, SchemaRegistryError> {
+    pub async fn proto_schema_of(&self, id: u32) -> Result<ProtoSchema, SchemaRegistryError> {
         let schemas = self.schemas_of(id).await?;
         let compiled = ProtoSchema::try_compile(schemas.as_slice())?;
         Ok(compiled)
@@ -178,7 +178,7 @@ mod tests {
         let registry = SchemaRegistry::new(settings);
         registry.insert_raw_schemas(80, vec![get_proto_sample().to_string()]).unwrap();
 
-        let res = registry.compiled_schema_of(80).await.unwrap();
+        let res = registry.proto_schema_of(80).await.unwrap();
 
         let ctx = &res.context;
         let _info = ctx.get_message("model.Task").unwrap();

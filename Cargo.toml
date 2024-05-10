@@ -1,10 +1,8 @@
-#[package]
-
-
 [workspace]
 members = [
     "crates/ingest-cli",
-    "crates/schema-registry"
+    "crates/schema-registry",
+    "internal-examples"
 ]
 
 resolver = "2"
