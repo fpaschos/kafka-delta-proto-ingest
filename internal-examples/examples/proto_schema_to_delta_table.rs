@@ -11,7 +11,7 @@ use schema_registry::ProtoSchema;
 
 use ingest::{record_batch_from_json};
 
-// TODO change proto to arrow Timempstamp mapping to map delta StructType conversion
+// TODO change proto to arrow Timestamp mapping to map delta StructType conversion
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 
