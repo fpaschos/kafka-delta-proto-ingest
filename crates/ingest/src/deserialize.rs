@@ -3,7 +3,8 @@ use schema_registry_converter::async_impl::schema_registry::SrSettings;
 use schema_registry_converter::error::SRCError;
 use crate::{IngestError, IngestOptions, SchemaSource};
 use crate::MessageFormat::Protobuf;
-use schema_registry_converter::async_impl::proto_decoder::DecodeResultWithContext;
+use schema_registry_converter::async_impl::proto_decoder::{DecodeResultWithContext};
+use schema_registry::{ProtoDecoder};
 
 
 #[derive(Debug, thiserror::Error)]
@@ -17,10 +18,17 @@ pub enum DeserializeError {
 }
 
 pub struct ProtoDeserializer {
+    decoder: ProtoDecoder,
+}
+
+
+
+// TODO remove and replace with custom from schema-registry module.
+pub struct OldProtoDeserializer {
     decoder: EasyProtoDecoder,
 }
 
-impl ProtoDeserializer {
+impl OldProtoDeserializer {
 
     pub fn build_from(opts: IngestOptions) -> Result<Self, IngestError> {
         match &opts.input_format {

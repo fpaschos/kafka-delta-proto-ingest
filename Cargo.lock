@@ -1461,6 +1461,7 @@ dependencies = [
  "anyhow",
  "deltalake",
  "rdkafka",
+ "schema-registry",
  "schema_registry_converter",
  "serde_json",
  "thiserror",
