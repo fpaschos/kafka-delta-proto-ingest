@@ -3,20 +3,21 @@ use deltalake::arrow::datatypes::SchemaRef;
 use deltalake::DeltaOps;
 use deltalake::kernel::StructType;
 use deltalake::protocol::SaveMode;
+use deltalake::writer::{DeltaWriter, JsonWriter};
 use protofish::context::TypeInfo;
 use protofish::decode::EnumValue;
 use protofish::prelude::{FieldValue, MessageValue, Value};
 
 use schema_registry::ProtoSchema;
 
-use ingest::{record_batch_from_json};
 
 // TODO change proto to arrow Timestamp mapping to map delta StructType conversion
+
+/// Example of converting a protobuf schema to a local delta table and write binary protobuf formatted data to it.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     let schema = ProtoSchema::try_compile_with_full_name("example.Person", vec![raw_proto_schema()].as_ref())?;
-    let arrow_schema : SchemaRef = Arc::new(schema.to_arrow_schema()?);
+    let arrow_schema: SchemaRef = Arc::new(schema.to_arrow_schema()?);
     let delta_schema: StructType = StructType::try_from(arrow_schema.as_ref())?;
 
     // Uncomment to print the delta schema as json
@@ -25,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
 
     // Create persons table (using overwrite mode for simplicity)
-    let _t = DeltaOps::try_from_uri("./data/persons")
+    let mut table = DeltaOps::try_from_uri("./data/persons")
         .await?
         .create()
         .with_table_name("person")
@@ -36,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Generate 1000 random persons and convert them to json values
     let persons = (0..1000).map(|_| {
-         create_random_person_proto_value(&schema)
+        create_random_person_proto_value(&schema)
     }).collect::<Vec<_>>();
 
     let time = std::time::SystemTime::now();
@@ -44,20 +45,27 @@ async fn main() -> anyhow::Result<()> {
         schema.decode_to_json(x).unwrap()
     }).collect::<Vec<_>>();
 
+    // Uncomment to create record batch from json
+    // let batch_record = record_batch_from_json(arrow_schema, &persons)?;
+    // println!("Batch record size {}", batch_record.num_rows());
+    // println!("Elapsed time: {:?}", time.elapsed()?);
+
     // Write persons to the table
+    // Using json writer from https://github.com/delta-io/delta-rs/blob/main/crates/core/src/writer/json.rs
+    let mut writer = JsonWriter::for_table(&table)?;
+    writer.write(persons).await?;
 
-    let batch_record = record_batch_from_json(arrow_schema, &persons)?;
-    println!("Batch record size {}",batch_record.num_rows());
-    println!("Elapsed time: {:?}", time.elapsed().unwrap());
-
-    // Read from table and display
+    let adds = writer
+        .flush_and_commit(&mut table)
+        .await?;
+    println!("{} adds written", adds);
 
     Ok(())
 }
 
 // Raw protobuf 3 schema
 fn raw_proto_schema() -> String {
-        r#"
+    r#"
         syntax = "proto3";
 
         package example;
@@ -157,8 +165,8 @@ fn create_random_person_proto_value(schema: &ProtoSchema) -> Vec<u8> {
             FieldValue {
                 number: 4,
                 value: Value::String("123e4567-e89b-12d3-a456-426614174000".to_string()),
-            }
-        ]
+            },
+        ],
     };
 
     // Construct person message value
@@ -202,8 +210,8 @@ fn create_random_person_proto_value(schema: &ProtoSchema) -> Vec<u8> {
                         FieldValue {
                             number: 3,
                             value: Value::String("test@test.com".into()),
-                        }
-                    ]
+                        },
+                    ],
                 })),
 
             },
@@ -217,10 +225,10 @@ fn create_random_person_proto_value(schema: &ProtoSchema) -> Vec<u8> {
                             number: 1,
                             value: Value::Message(Box::new(physical_value)),
                         }
-                    ]
+                    ],
                 })),
-            }
-        ]
+            },
+        ],
     };
     proto_value.encode(&schema.context()).to_vec()
 }

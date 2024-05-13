@@ -22,3 +22,7 @@ protofish = "0.5.2"
 [[example]]
 name = "proto-schema-to-delta-table"
 path = "examples/proto_schema_to_delta_table.rs"
+
+[[example]]
+name = "read-delta-table"
+path = "examples/read_delta_table.rs"

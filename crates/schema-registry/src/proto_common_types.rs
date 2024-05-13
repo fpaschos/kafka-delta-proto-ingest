@@ -1,5 +1,5 @@
-/// Taken as is from: https://github.com/gklijs/schema_registry_converter/blob/main/src/proto_common_types.rs
-/// Adds the schema of the common type imports
+//! Taken as is from: https://github.com/gklijs/schema_registry_converter/blob/main/src/proto_common_types.rs
+//! Adds the schema of the common type imports
 pub(crate) fn add_common_files(imports: &[String], files: &mut Vec<String>) {
     for import in imports {
         if let Some(common_schema) = is_common_import(import) {

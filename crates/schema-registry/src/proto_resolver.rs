@@ -1,4 +1,4 @@
-/// Directly taken and modified from: https://github.com/gklijs/schema_registry_converter/blob/main/src/proto_resolver.rs
+//!Directly taken and modified from: https://github.com/gklijs/schema_registry_converter/blob/main/src/proto_resolver.rs
 
 use logos::Logos;
 use crate::registry::SchemaRegistryError;
