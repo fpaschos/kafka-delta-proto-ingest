@@ -11,6 +11,7 @@ use schema_registry::ProtoSchema;
 
 use ingest::{record_batch_from_json};
 
+// TODO change proto to arrow Timempstamp mapping to map delta StructType conversion
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 
@@ -33,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         .with_columns(delta_schema.fields().to_vec())
         .await?;
 
-    // Generate 100 random persons and convert them to json values
+    // Generate 1000 random persons and convert them to json values
     let persons = (0..1000).map(|_| {
          create_random_person_proto_value(&schema)
     }).collect::<Vec<_>>();
@@ -48,8 +49,8 @@ async fn main() -> anyhow::Result<()> {
     let batch_record = record_batch_from_json(arrow_schema, &persons)?;
     println!("Batch record size {}",batch_record.num_rows());
     println!("Elapsed time: {:?}", time.elapsed().unwrap());
-    // Read from table and display
 
+    // Read from table and display
 
     Ok(())
 }
