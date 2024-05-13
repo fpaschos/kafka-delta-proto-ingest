@@ -6,5 +6,8 @@ mod arrow;
 mod json;
 
 pub use proto_schema::ProtoSchema;
-pub use registry::SchemaRegistryError;
+pub use registry::{
+    SchemaRegistryError,
+    SchemaRegistry
+};
 
