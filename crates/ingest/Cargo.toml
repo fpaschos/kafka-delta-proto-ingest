@@ -1,8 +1,10 @@
 [package]
-name = "ingest-cli"
-version = { workspace = true }
+name = "ingest"
+description = "Cli for kafka protobuf to delta table ingestion"
 edition = "2021"
 authors = { workspace = true }
+version = { workspace = true }
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,6 +12,9 @@ authors = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+
+deltalake = { workspace = true }
+serde_json = { workspace = true }
 
 
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

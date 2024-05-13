@@ -1,0 +1,28 @@
+[package]
+name = "internal-examples"
+description = "Examples of internal crates usage"
+edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+readme = "README.md"
+
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+deltalake = { workspace = true , features = ["datafusion"] }
+serde_json = { workspace = true }
+
+schema-registry = { path = "../crates/schema-registry" }
+ingest = { path = "../crates/ingest" }
+
+protofish = "0.5.2"
+
+
+[[example]]
+name = "proto-schema-to-delta-table"
+path = "examples/proto_schema_to_delta_table.rs"
+
+[[example]]
+name = "read-delta-table"
+path = "examples/read_delta_table.rs"

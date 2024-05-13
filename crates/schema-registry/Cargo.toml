@@ -3,6 +3,7 @@ name = "schema-registry"
 description = "Confluent schema registry wrapper for protobuf support"
 edition = "2021"
 version = { workspace = true }
+authors = { workspace = true }
 readme = "README.md"
 
 
@@ -22,3 +23,4 @@ deltalake = { workspace = true }
 
 schema_registry_converter = { version = "4.0.0", features = ["easy", "protofish", "proto_decoder"] }
 protofish = "0.5.2"
+logos = "0.13.0"

@@ -317,9 +317,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e9eabd7a98fe442131a17c316bd9349c43695e49e730c3c8e12cfb5f4da2693"
+checksum = "9c90a406b4495d129f00461241616194cb8a032c8d1c53c657f0961d5f8e0498"
 dependencies = [
  "bzip2",
  "flate2",
@@ -1455,12 +1455,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ingest-cli"
+name = "ingest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "deltalake",
  "rdkafka",
  "schema_registry_converter",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -1492,6 +1494,19 @@ name = "integer-encoding"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "924df4f0e24e2e7f9cdd90babb0b96f93b20f3ecfa949ea9e6613756b8c8e1bf"
+
+[[package]]
+name = "internal-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "deltalake",
+ "ingest",
+ "protofish",
+ "schema-registry",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "ipnet"
@@ -2482,6 +2497,7 @@ dependencies = [
  "dashmap",
  "deltalake",
  "futures-util",
+ "logos",
  "protofish",
  "schema_registry_converter",
  "serde_json",

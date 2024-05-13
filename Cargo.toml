@@ -1,10 +1,8 @@
-#[package]
-
-
 [workspace]
 members = [
-    "crates/ingest-cli",
-    "crates/schema-registry"
+    "crates/ingest",
+    "crates/schema-registry",
+    "internal-examples"
 ]
 
 resolver = "2"
@@ -29,29 +27,12 @@ futures = "0.3.30"
 serde = "1.0.198"
 serde_json = "1.0.116"
 dashmap = "5.5.3"
-deltalake = { version = "0.17.1", features = ["datafusion"] }
+deltalake = { version = "0.17.1", default-features = false }
 
 
 [profile.release]
 codegen-units = 1
 lto = true
-
-#
-#[[example]]
-#name = "create-table"
-#path = "examples/delta/create_table/main.rs"
-#
-#[[example]]
-#name = "write-table"
-#path = "examples/delta/write_table/main.rs"
-#
-#[[example]]
-#name = "read-table"
-#path = "examples/delta/read_table/main.rs"
-#
-#[[example]]
-#name= "proto-delta-schema"
-#path = "examples/delta/proto_delta_schema/main.rs"
 
 
 
